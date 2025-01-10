@@ -20,6 +20,7 @@ Note: this guide is not for absolute beginners so im assuming that you have the 
   * [tests](#tests)
   * [urls](#urls)
   * [Swagger_UI](#Swagger_UI)
+  * [Logging](#Logging)
   
 <hr>
 
@@ -986,3 +987,68 @@ In Summary:
     Reducing manual documentation efforts.
     Supporting collaboration between development teams.
     By using Swagger UI, Django projects can have well-documented, easily testable, and accessible APIs, which streamlines the development process and improves the overall user experience for API consumers.
+
+
+
+
+
+### Logging
+
+    import os 
+    LOGGING_DIR = os.path.join(BASE_DIR, 'logs')  # Define the logs directory
+
+    # Make sure the directory exists
+    if not os.path.exists(LOGGING_DIR):
+        os.makedirs(LOGGING_DIR)
+
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'console': {
+                'level': 'DEBUG',
+                'class': 'logging.StreamHandler',
+            },
+            'file': {
+                'level': 'ERROR',
+                'class': 'logging.FileHandler',
+                'filename': os.path.join(LOGGING_DIR, 'error.log'),
+            },
+        },
+        'loggers': {
+            'django': {
+                'handlers': ['console', 'file'],
+                'level': 'ERROR',
+                'propagate': True,
+            },
+        },
+    }
+
+
+what we do this ?
+
+This code is part of the logging configuration for a Django project. Here's a breakdown of what it does:
+
+Directory Setup for Logs:
+
+LOGGING_DIR = os.path.join(BASE_DIR, 'logs'): Defines the directory where logs will be stored. BASE_DIR is typically the root directory of the Django project, and the logs will be saved in a folder named logs within that directory.
+if not os.path.exists(LOGGING_DIR): os.makedirs(LOGGING_DIR): Checks if the logs directory exists. If not, it creates the directory to ensure there's a valid path to store logs.
+Logging Configuration:
+
+LOGGING is a dictionary that defines the configuration for logging in Django.
+Inside the LOGGING dictionary:
+
+Handlers:
+Console Handler:
+This sends log messages to the console (stdout) with a severity level of DEBUG or higher.
+It's useful for development or debugging as it displays logs in the terminal.
+File Handler:
+This logs messages to a file. In this case, it writes error-level (ERROR) and higher logs to a file named error.log inside the logs directory.
+Loggers:
+There is a logger specifically for Django's internal logging ('django').
+This logger will handle logs with ERROR level or higher and will use both the console and file handlers to record the logs.
+propagate: True means that the logs from the Django logger will propagate to higher-level loggers (e.g., root logger).
+Summary:
+The code ensures the existence of a logs directory.
+It sets up logging so that debug messages are shown in the console, and error messages are written to a file (error.log).
+This configuration helps monitor application behavior during development and production, especially for catching errors.
