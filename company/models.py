@@ -136,28 +136,40 @@ class Project(models.Model):
     def __str__(self):
         return self.name
 
+
 class PerformanceReview(models.Model):
     STAGE_CHOICES = [
-        ('Pending Review', 'Pending Review'),
-        ('Review Scheduled', 'Review Scheduled'),
-        ('Feedback Provided', 'Feedback Provided'),
-        ('Under Approval', 'Under Approval'),
-        ('Review Approved', 'Review Approved'),
-        ('Review Rejected', 'Review Rejected'),
+        ('pending_review', 'Pending Review'),
+        ('review_scheduled', 'Review Scheduled'),
+        ('feedback_provided', 'Feedback Provided'),
+        ('under_approval', 'Under Approval'),
+        ('review_approved', 'Review Approved'),
+        ('review_rejected', 'Review Rejected'),
     ]
-    
-    employee = models.ForeignKey('Employee', related_name='performance_reviews', on_delete=models.CASCADE)
-    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default='Pending Review')
+
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='performance_reviews')
+    stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default='pending_review')
     review_date = models.DateTimeField(null=True, blank=True)
-    feedback = models.TextField(null=True, blank=True)
-    approval_status = models.BooleanField(default=False)  # True for approved, False for rejected
+    feedback = models.TextField(blank=True, null=True)
+    is_approved = models.BooleanField(default=False)  # True for approved, False for rejected
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Performance Review for {self.employee.name} - {self.stage}"
+        return f"Performance Review for {self.employee.name} - {self.get_stage_display()}"
 
-    def save(self, *args, **kwargs):
-        if self.stage == 'Review Approved' and self.approval_status is False:
-            raise ValueError("Review cannot be marked as approved if not approved by manager.")
-        super().save(*args, **kwargs)
+    def transition(self, new_stage):
+        """Transition logic for stages."""
+        allowed_transitions = {
+            'pending_review': ['review_scheduled'],
+            'review_scheduled': ['feedback_provided'],
+            'feedback_provided': ['under_approval'],
+            'under_approval': ['review_approved', 'review_rejected'],
+            'review_rejected': ['feedback_provided'],
+        }
+        if new_stage not in allowed_transitions.get(self.stage, []):
+            raise ValueError(f"Cannot transition from {self.stage} to {new_stage}")
+        self.stage = new_stage
+        self.save()
+
+

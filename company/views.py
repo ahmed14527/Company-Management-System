@@ -19,51 +19,60 @@ from .utils import generate_access_token
 import jwt
 
 
+
+from rest_framework import viewsets, permissions
+from .models import User, Company, Department, Employee, Project, PerformanceReview
+from .serializers import (
+    UserSerializer, CompanySerializer, DepartmentSerializer, 
+    EmployeeSerializer, ProjectSerializer, PerformanceReviewSerializer
+)
+from .permissions import IsAdmin, IsManager, IsEmployee
+
+
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated, IsAdmin]  # Only Admin can view/edit users
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+
 
 class CompanyViewSet(viewsets.ModelViewSet):
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
-    permission_classes = [IsAuthenticated, IsAdmin]  # Only Admin can view/edit companies
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
-    permission_classes = [IsAuthenticated, IsManager]  # Admin and Manager can manage departments
+    permission_classes = [permissions.IsAuthenticated, IsManager]
+
 
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
-    permission_classes = [IsAuthenticated, IsEmployee]  # All roles can access employee info, with restrictions
+    permission_classes = [permissions.IsAuthenticated, IsManager]
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        if self.request.user.role == 'Employee':
-            queryset = queryset.filter(user=self.request.user)  # Employees can only see their own profile
-        return queryset
 
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated, IsManager]  # Admins and Managers can manage projects
+    permission_classes = [permissions.IsAuthenticated, IsManager]
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        if self.request.user.role == 'Employee':
-            queryset = queryset.filter(assigned_employees__user=self.request.user)  # Employees can only see their own projects
-        return queryset
 
 class PerformanceReviewViewSet(viewsets.ModelViewSet):
     queryset = PerformanceReview.objects.all()
     serializer_class = PerformanceReviewSerializer
-    permission_classes = [IsAuthenticated, IsManager]  # Admins and Managers can view/edit reviews
+    permission_classes = [permissions.IsAuthenticated, IsManager]
 
-
-
-
+    def perform_update(self, serializer):
+        """
+        Override to enforce transition logic on stage updates.
+        """
+        instance = self.get_object()
+        new_stage = serializer.validated_data.get('stage', instance.stage)
+        if new_stage != instance.stage:
+            instance.transition(new_stage)
+        serializer.save()
 
 
 

@@ -207,138 +207,132 @@ Now put the following code in it,
         def __str__(self):
             return self.name
 
+
     class PerformanceReview(models.Model):
         STAGE_CHOICES = [
-            ('Pending Review', 'Pending Review'),
-            ('Review Scheduled', 'Review Scheduled'),
-            ('Feedback Provided', 'Feedback Provided'),
-            ('Under Approval', 'Under Approval'),
-            ('Review Approved', 'Review Approved'),
-            ('Review Rejected', 'Review Rejected'),
+            ('pending_review', 'Pending Review'),
+            ('review_scheduled', 'Review Scheduled'),
+            ('feedback_provided', 'Feedback Provided'),
+            ('under_approval', 'Under Approval'),
+            ('review_approved', 'Review Approved'),
+            ('review_rejected', 'Review Rejected'),
         ]
-        
-        employee = models.ForeignKey('Employee', related_name='performance_reviews', on_delete=models.CASCADE)
-        stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default='Pending Review')
+
+        employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='performance_reviews')
+        stage = models.CharField(max_length=20, choices=STAGE_CHOICES, default='pending_review')
         review_date = models.DateTimeField(null=True, blank=True)
-        feedback = models.TextField(null=True, blank=True)
-        approval_status = models.BooleanField(default=False)  # True for approved, False for rejected
+        feedback = models.TextField(blank=True, null=True)
+        is_approved = models.BooleanField(default=False)  # True for approved, False for rejected
         created_at = models.DateTimeField(auto_now_add=True)
         updated_at = models.DateTimeField(auto_now=True)
 
         def __str__(self):
-            return f"Performance Review for {self.employee.name} - {self.stage}"
+            return f"Performance Review for {self.employee.name} - {self.get_stage_display()}"
 
-        def save(self, *args, **kwargs):
-            if self.stage == 'Review Approved' and self.approval_status is False:
-                raise ValueError("Review cannot be marked as approved if not approved by manager.")
-            super().save(*args, **kwargs)
+        def transition(self, new_stage):
+            """Transition logic for stages."""
+            allowed_transitions = {
+                'pending_review': ['review_scheduled'],
+                'review_scheduled': ['feedback_provided'],
+                'feedback_provided': ['under_approval'],
+                'under_approval': ['review_approved', 'review_rejected'],
+                'review_rejected': ['feedback_provided'],
+            }
+            if new_stage not in allowed_transitions.get(self.stage, []):
+                raise ValueError(f"Cannot transition from {self.stage} to {new_stage}")
+            self.stage = new_stage
+            self.save()
+
+
 
     
 
 * what we done here ?
 
-This code defines several models in Django for managing a company system. It includes a custom user model with roles, company, department, employee, project, and performance review models. Below is an explanation of each component and its functionality:
+This code defines a Django app's database models and associated functionality. It includes customizations for a User model, and models for managing companies, departments, employees, projects, and performance reviews. Here's a breakdown:
 
-1. Custom User Model (User)
-Purpose: The User model extends Django's AbstractBaseUser to provide a custom authentication system, using email as the unique identifier for users instead of the default username field.
+1. Custom User Management
 
-Fields:
+CustomUserManager
+A custom manager for creating User instances.
+Provides methods:
+create_user: Creates a standard user, ensuring an email is provided, and hashes the password.
+create_superuser: Creates a superuser with elevated privileges (is_staff and is_superuser set to True).
+User Model
+Extends Django's AbstractBaseUser and PermissionsMixin to create a customizable user model.
+Key Fields:
+email: Used as the unique identifier (USERNAME_FIELD).
+username: Optional, for legacy support.
+role: Defines the user's role (Admin, Manager, Employee).
+company: Links the user to a Company.
+is_staff and is_active: Control access to the admin panel and user activity.
+Custom user creation is handled by CustomUserManager.
 
-user_id: Auto-incremented primary key for user identification.
-email: The unique email address used for user identification.
-username: An optional field for legacy support, not used as a unique identifier.
-is_active: A boolean flag to mark if the user is active.
-is_staff: A boolean flag indicating if the user is a staff member.
-date_joined: Date when the user joined the system.
-role: A choice field to define the user's role within the company (Admin, Manager, or Employee).
-company: A foreign key that links the user to a specific company.
-Methods:
 
-__str__(self): Returns the user’s email when the object is represented as a string.
-Manager:
+2. Company, Department, and Employee Models
 
-The CustomUserManager class provides methods to create a user and a superuser. The create_user method ensures that the user is created with an email and password, and create_superuser ensures that a superuser has the is_staff and is_superuser flags set to True.
-2. Company Model (Company)
-Purpose: Represents a company with details about the company's employees, departments, and projects.
-
-Fields:
-
-name: The name of the company.
+Company Model
+Represents a company.
+Key Field:
+name: Name of the company.
 Properties:
-
-number_of_departments: Returns the number of departments within the company by counting the related departments.
-number_of_employees: Returns the number of users (employees) associated with the company.
-number_of_projects: Returns the number of projects associated with the company.
-Methods:
-
-__str__(self): Returns the name of the company.
-3. Department Model (Department)
-Purpose: Represents a department within a company, which can have employees and projects.
-
+number_of_departments: Counts associated departments.
+number_of_employees: Counts associated users (employees).
+number_of_projects: Counts associated projects.
+Department Model
+Represents a department within a company.
 Fields:
-
-company: A foreign key to the Company model, indicating which company the department belongs to.
-name: The name of the department.
+company: Foreign key to the company.
+name: Name of the department.
 Properties:
-
-number_of_employees: Returns the number of employees in the department.
-number_of_projects: Returns the number of projects within the department.
-Methods:
-
-__str__(self): Returns the name of the department.
-4. Employee Model (Employee)
-Purpose: Represents an employee within a company, linking the user to the company and department.
-
-Fields:
-
-user: A one-to-one relationship with the User model, linking the employee to the user.
-company: A foreign key to the Company model, indicating which company the employee works for.
-department: A foreign key to the Department model, indicating which department the employee belongs to.
-email_address: The employee's email address.
-mobile_number: The employee's mobile number (optional).
-address: The employee's address (optional).
-designation: The employee's job title/designation.
-hired_on: The date the employee was hired.
+number_of_employees: Counts employees in the department.
+number_of_projects: Counts projects within the department.
+Employee Model
+Represents an employee.
+Key Fields:
+user: One-to-one link with a User instance.
+company and department: Foreign keys linking the employee to their organization.
+designation: Job title.
+hired_on: Date of hiring.
 Properties:
+days_employed: Calculates the number of days since hiring.
+number_of_projects: Counts the projects assigned to the employee.
 
-days_employed: Returns the number of days the employee has been employed (calculated based on the hired_on date).
-number_of_projects: Returns the number of projects assigned to the employee.
-Methods:
+3. Project Management
 
-__str__(self): Returns the employee’s username and designation.
-5. Project Model (Project)
-Purpose: Represents a project within a company, which may involve multiple departments and employees.
-
+Project Model
+Represents a project within a company and department.
 Fields:
+company and department: Foreign keys linking the project.
+name, description: Details of the project.
+start_date, end_date: Project timeline.
+assigned_employees: Many-to-many relationship with employees, enabling multiple employees to be assigned to the same project.
 
-company: A foreign key to the Company model, indicating which company the project belongs to.
-department: A foreign key to the Department model, indicating which department is associated with the project.
-name: The name of the project.
-description: A description of the project.
-start_date: The start date of the project.
-end_date: The optional end date of the project.
-assigned_employees: A many-to-many relationship to the Employee model, indicating the employees working on the project.
-Methods:
+4. Performance Reviews
 
-__str__(self): Returns the name of the project.
-6. Performance Review Model (PerformanceReview)
-Purpose: Represents a performance review for an employee, tracking the review's stage and approval status.
-
+PerformanceReview Model
+Represents performance evaluations for employees.
 Fields:
-
-employee: A foreign key to the Employee model, indicating which employee the review is for.
-stage: A choice field that tracks the status of the review (e.g., 'Pending Review', 'Review Scheduled', etc.).
-review_date: The date and time the review is scheduled or completed.
-feedback: Optional feedback provided during the review.
-approval_status: A boolean flag indicating if the review has been approved (True) or rejected (False).
-created_at: The date and time the performance review was created.
-updated_at: The date and time the performance review was last updated.
+employee: Foreign key linking the review to an employee.
+stage: Current stage of the review process, with predefined choices (e.g., "pending_review", "feedback_provided").
+review_date: When the review is conducted.
+feedback: Text feedback for the review.
+is_approved: Boolean indicating if the review is approved.
+created_at, updated_at: Track creation and modification times.
 Methods:
+transition: Controls stage transitions based on allowed flows. Throws an error for invalid transitions.
 
-__str__(self): Returns a string representation of the performance review, including the employee’s name and review stage.
-save(self, *args, **kwargs): Custom save method that raises an error if the review is marked as approved but not approved by the manager.
+5. Key Features
 
-These models define the structure and relationships between different entities in your Django application. They can be used to create database tables and perform operations on the data stored in those tables, such as creating, updating, and querying records.
+Custom User Model: Uses email as the primary authentication field and allows role-based differentiation.
+Data Relationships:
+Companies have departments and projects.
+Departments have employees and projects.
+Employees participate in multiple projects and have performance reviews.
+Dynamic Properties: @property methods calculate values (e.g., number of employees in a department, days employed).
+Validation and Business Logic:
+Custom stage transitions in PerformanceReview.
+Ensures proper superuser configuration.
 
 
 ## migrations 
@@ -700,134 +694,182 @@ The API endpoints provide authentication, registration, login, logout, and secur
 ### tests
 
     from django.test import TestCase
-    from django.contrib.auth import get_user_model
-    from .models import Company, Department, Employee, PerformanceReview
+    from django.utils import timezone
     from datetime import date
+    from django.utils.timezone import now
+    from .models import (
+        User,
+        Company,
+        Department,
+        Employee,
+        Project,
+        PerformanceReview
+    )
 
-    class ModelTests(TestCase):
 
+    class ModelsTestCase(TestCase):
         def setUp(self):
-            # Setup sample data
-            self.company = Company.objects.create(name="Tech Corp")
-            self.department = Department.objects.create(name="Engineering", company=self.company)
-            self.user = get_user_model().objects.create_user(username="testuser", password="password123")
-            self.employee = Employee.objects.create(
-                user=self.user, company=self.company, department=self.department,
-                email_address="testuser@techcorp.com", mobile_number="1234567890", 
-                designation="Developer", hired_on=date(2020, 1, 1)
+            # Create a company
+            self.company = Company.objects.create(name="TechCorp")
+
+            # Create a department
+            self.department = Department.objects.create(company=self.company, name="Development")
+
+            # Create a user
+            self.user = User.objects.create_user(
+                email="employee@example.com", 
+                password="password123", 
+                role="Employee", 
+                company=self.company
             )
-        
-        def test_number_of_departments_in_company(self):
-            # Test the `number_of_departments` property on Company
+
+            # Create an employee
+            self.employee = Employee.objects.create(
+                user=self.user,
+                company=self.company,
+                department=self.department,
+                email_address="employee@example.com",
+                designation="Software Engineer",
+                hired_on=date(2023, 1, 1)
+            )
+
+            # Create a project
+            self.project = Project.objects.create(
+                company=self.company,
+                department=self.department,
+                name="Project A",
+                description="A sample project",
+                start_date=date(2023, 2, 1),
+                end_date=date(2023, 6, 1)
+            )
+            self.project.assigned_employees.add(self.employee)
+
+            # Create a performance review
+            self.review = PerformanceReview.objects.create(
+                employee=self.employee,
+                stage="pending_review",
+                feedback="Great work!",
+                is_approved=False
+            )
+
+        def test_user_creation(self):
+            self.assertEqual(self.user.email, "employee@example.com")
+            self.assertTrue(self.user.check_password("password123"))
+            self.assertEqual(self.user.role, "Employee")
+
+        def test_company_creation(self):
+            self.assertEqual(self.company.name, "TechCorp")
             self.assertEqual(self.company.number_of_departments, 1)
+            self.assertEqual(self.company.number_of_employees, 1)
 
-        def test_number_of_employees_in_department(self):
-            # Test the `number_of_employees` property on Department
+        def test_department_creation(self):
+            self.assertEqual(self.department.name, "Development")
             self.assertEqual(self.department.number_of_employees, 1)
+            self.assertEqual(self.department.number_of_projects, 1)
 
-        def test_days_employed(self):
-            # Test the `days_employed` property on Employee
-            self.assertGreater(self.employee.days_employed, 0)
+        def test_employee_creation(self):
+            self.assertEqual(self.employee.user.email, "employee@example.com")
+            self.assertEqual(self.employee.designation, "Software Engineer")
+            self.assertEqual(self.employee.days_employed, (timezone.now().date() - date(2023, 1, 1)).days)
 
-        def test_performance_review_approval_validation(self):
-            # Test the custom validation in PerformanceReview's save method
-            performance_review = PerformanceReview(employee=self.employee, stage="Review Approved", approval_status=False)
+        def test_project_creation(self):
+            self.assertEqual(self.project.name, "Project A")
+            self.assertEqual(self.project.assigned_employees.count(), 1)
+            self.assertEqual(self.project.assigned_employees.first(), self.employee)
+
+        def test_performance_review_creation(self):
+            self.assertEqual(self.review.employee, self.employee)
+            self.assertEqual(self.review.stage, "pending_review")
+            self.assertEqual(self.review.feedback, "Great work!")
+            self.assertFalse(self.review.is_approved)
+
+        def test_performance_review_stage_transition(self):
+            # Test a valid stage transition
+            self.review.transition("review_scheduled")
+            self.assertEqual(self.review.stage, "review_scheduled")
+
+            # Test an invalid stage transition
             with self.assertRaises(ValueError):
-                performance_review.save()  # Should raise error when trying to save a review with "Review Approved" but not approved
+                self.review.transition("review_approved")
+
+        def test_company_relationships(self):
+            self.assertEqual(self.company.users.count(), 1)
+            self.assertEqual(self.company.departments.count(), 1)
+            self.assertEqual(self.company.projects.count(), 1)
+
+        def test_department_relationships(self):
+            self.assertEqual(self.department.employees.count(), 1)
+            self.assertEqual(self.department.projects.count(), 1)
+        
+        
 
 
-    from django.test import TestCase
-    from .models import Company, Department, Employee
-    from .serializers import PerformanceReviewSerializer
-    from datetime import date
 
-    class PerformanceReviewSerializerTest(TestCase):
-
-        def setUp(self):
-            # Setup sample data for this test
-            self.company = Company.objects.create(name="Tech Corp")
-            self.department = Department.objects.create(name="Engineering", company=self.company)
-            self.user = get_user_model().objects.create_user(username="testuser", password="password123")
-            self.employee = Employee.objects.create(
-                user=self.user, company=self.company, department=self.department,
-                email_address="testuser@techcorp.com", mobile_number="1234567890", 
-                designation="Developer", hired_on=date(2020, 1, 1)
-            )
-
-        def test_performance_review_valid_data(self):
-            # Test valid data for performance review serializer
-            data = {
-                'employee': self.employee.id,  # Correctly associate the employee
-                'stage': 'Review Scheduled',
-                'approval_status': True
-            }
-            serializer = PerformanceReviewSerializer(data=data)
-            self.assertTrue(serializer.is_valid())
-
-        def test_performance_review_invalid_approval_status(self):
-            # Test invalid data for performance review (approval_status is False but stage is "Review Approved")
-            data = {
-                'employee': self.employee.id,  # Correctly associate the employee
-                'stage': 'Review Approved',
-                'approval_status': False
-            }
-            serializer = PerformanceReviewSerializer(data=data)
-            self.assertFalse(serializer.is_valid())
-            self.assertIn('non_field_errors', serializer.errors)
-            self.assertEqual(serializer.errors['non_field_errors'][0], "Review cannot be marked as approved if not approved by manager.")
 
 
 
 what we do here ? :
- This code defines two sets of tests using Django’s TestCase class to ensure that the application’s models and serializers are functioning as expected. Here's a breakdown of what is happening in both parts of the code:
+Imports
+from django.test import TestCase
+Provides a test case class to write and run tests in Django.
 
-    1. ModelTests Class
-        This class contains tests for various model properties and methods defined in the Django models (Company, Department, Employee, PerformanceReview).
+Other imports (timezone, date, now)
+Used for working with dates and times in Django.
 
-    setUp Method:
-    Purpose: This method is executed before each test case to set up any data required for the tests.
-    Data Creation:
-    A Company instance (Tech Corp) is created.
-    A Department instance (Engineering) is created and associated with the Company.
-    A User instance (testuser) is created using Django’s get_user_model(), and this user is then associated with an Employee instance (Developer).
-    Test Cases in ModelTests:
-    test_number_of_departments_in_company:
+from .models import ...
+Imports the models (User, Company, Department, Employee, Project, and PerformanceReview) to test their functionality.
 
-    Purpose: Tests the number_of_departments property on the Company model.
-    Expected Result: As one department (Engineering) has been created under the company (Tech Corp), the property should return 1.
-    test_number_of_employees_in_department:
+Test Class: ModelsTestCase
+The class inherits from TestCase, which allows the setup of test data and the execution of assertions.
 
-    Purpose: Tests the number_of_employees property on the Department model.
-    Expected Result: As one employee (testuser) has been associated with the department (Engineering), the property should return 1.
-    test_days_employed:
+1. setUp Method
+Runs before each test method to set up the necessary test data.
+Creates instances of models:
+A Company named "TechCorp".
+A Department called "Development" within the company.
+A User associated with the company.
+An Employee linked to the user, company, and department.
+A Project assigned to the department and employee.
+A PerformanceReview linked to the employee.
+2. Test Methods
+Each method validates specific aspects of the models' behavior. The assertEqual and assertTrue methods are used to verify expected outcomes.
 
-    Purpose: Tests the days_employed property on the Employee model. This property calculates the number of days the employee has been employed since their hired_on date.
-    Expected Result: As the employee was hired on January 1, 2020, this test checks that the days_employed property returns a positive number greater than 0 (i.e., the employee has been employed for some days).
-    test_performance_review_approval_validation:
+test_user_creation
+Ensures the User instance is created with the correct email, password, and role.
 
-    Purpose: Tests the custom validation in the PerformanceReview model's save() method. The save() method raises an error if the review's stage is "Review Approved" but the approval_status is set to False.
-    Expected Result: This test checks that trying to save a performance review with "Review Approved" and approval_status=False will raise a ValueError.
-    2. PerformanceReviewSerializerTest Class
-    This class contains tests for the PerformanceReviewSerializer, which is responsible for serializing and deserializing the PerformanceReview model.
+test_company_creation
+Verifies that the Company has the expected number of departments and employees.
 
-    setUp Method:
-    Similar to the previous class, the setUp() method is used to prepare the necessary data:
-    A Company, Department, User, and Employee are created.
-    Test Cases in PerformanceReviewSerializerTest:
-    test_performance_review_valid_data:
+test_department_creation
+Ensures the Department has the correct number of employees and projects.
 
-    Purpose: Tests the PerformanceReviewSerializer with valid data.
-    Expected Result: The serializer should be valid when provided with a stage of "Review Scheduled" and approval_status=True. The test checks that the serializer correctly serializes the data without errors.
-    test_performance_review_invalid_approval_status:
+test_employee_creation
+Checks that the Employee is created with the correct details, including email, designation, and days employed (calculated using timezone.now()).
 
-    Purpose: Tests the PerformanceReviewSerializer with invalid data, specifically when the approval_status is False while the stage is "Review Approved".
-    Expected Result: The serializer should be invalid in this case, and the error message should include a non_field_errors entry with the message: "Review cannot be marked as approved if not approved by manager."
-    Why We Use These Tests:
-    Data Integrity: The tests help ensure that the logic behind the model properties (such as counting departments or employees) and validation rules (e.g., preventing invalid performance review data) are working as expected.
-    Reliability: Automated tests help identify issues early in the development cycle, improving the stability of the application.
-    Regression Testing: These tests provide a safety net to ensure that new changes don't break existing functionality.
-    Confidence in Models and Serializers: By testing both the models and serializers, we confirm that the data structure and the data transformation layers (serialization/deserialization) behave correctly.
-    In summary, these test cases verify that the business logic in the models and the data validation in the serializers are correctly implemented, ensuring the application behaves as intended.
+test_project_creation
+Verifies the Project is created and assigned to the correct employee.
+
+test_performance_review_creation
+Ensures the PerformanceReview has the correct stage, feedback, and approval status.
+
+test_performance_review_stage_transition
+Tests the ability to transition between review stages:
+
+Allows valid transitions (e.g., to review_scheduled).
+Raises an exception for invalid transitions (e.g., directly to review_approved).
+test_company_relationships
+Checks that the company has the correct number of related users, departments, and projects.
+
+test_department_relationships
+Verifies the department has the correct number of related employees and projects.
+
+Purpose
+These tests ensure the correct behavior and relationships of the models, particularly:
+
+Object creation and field values.
+Relationships between models (e.g., company to departments, department to employees).
+Custom behaviors like stage transitions in the PerformanceReview.
+By running this test suite, developers can catch errors in model logic or relationships early in development.
 
 
 

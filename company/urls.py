@@ -9,14 +9,15 @@ from company.views import (
 	UserViewAPI,
 	UserLogoutViewAPI
 )
-router = DefaultRouter()
 
-router.register(r'users', UserViewSet, basename='user')
-router.register(r'companies', CompanyViewSet, basename='company')
-router.register(r'departments', DepartmentViewSet, basename='department')
-router.register(r'employees', EmployeeViewSet, basename='employee')
-router.register(r'projects', ProjectViewSet, basename='project')
-router.register(r'performance-reviews', PerformanceReviewViewSet, basename='performance-review')
+
+router = DefaultRouter()
+router.register('users', UserViewSet, basename='user')
+router.register('companies', CompanyViewSet, basename='company')
+router.register('departments', DepartmentViewSet, basename='department')
+router.register('employees', EmployeeViewSet, basename='employee')
+router.register('projects', ProjectViewSet, basename='project')
+router.register('performance-reviews', PerformanceReviewViewSet, basename='performance-review')
 
 urlpatterns = [
     path('user/register/', UserRegistrationAPIView.as_view()),
